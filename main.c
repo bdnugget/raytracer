@@ -1,23 +1,55 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#define CANVAS_WIDTH 800
+#define CANVAS_HEIGHT 800
+
+typedef struct Color {
+  unsigned char r;
+  unsigned char g;
+  unsigned char b;
+} Color;
+
+void writeBitmap(Color *bitmap);
+
 int main(void)
 {
-  const int dimx = 800, dimy = 800;
-  int i, j;
-  FILE *fp = fopen("test.ppm", "wb"); /* b - binary mode */
-  (void) fprintf(fp, "P6\n%d %d\n255\n", dimx, dimy);
-  for (j = 0; j < dimy; ++j)
+  Color *bitmap = malloc(CANVAS_WIDTH * CANVAS_HEIGHT * sizeof(Color));
+  if (bitmap == NULL) {
+    printf("Error allocating bitmap.\n");
+    return EXIT_FAILURE;
+  }
+  for (int j = 0; j < CANVAS_HEIGHT; ++j)
   {
-    for (i = 0; i < dimx; ++i)
+    for (int i = 0; i < CANVAS_WIDTH; ++i)
     {
-      static unsigned char color[3];
-      color[0] = i % 256;  /* red */
-      color[1] = j % 256;  /* green */
-      color[2] = (i * j) % 256;  /* blue */
-      (void) fwrite(color, 1, 3, fp);
+      int idx = j * CANVAS_WIDTH + i;
+      bitmap[idx].r = i % 256;
+      bitmap[idx].g = j % 256;
+      bitmap[idx].b = (i * j) % 256;
     }
   }
-  (void) fclose(fp);
+  writeBitmap(bitmap);
+  free(bitmap);
   return EXIT_SUCCESS;
 }
+
+void writeBitmap(Color *bitmap)
+{
+  if (bitmap == NULL) {
+    printf("Bitmap is NULL.\n");
+    return;
+  }
+  FILE *fp = fopen("test.ppm", "wb");
+  if (fp == NULL) {
+    printf("Error opening file.\n");
+    return;
+  }
+  fprintf(fp, "P6\n%d %d\n255\n", CANVAS_WIDTH, CANVAS_HEIGHT);
+  setvbuf(fp, NULL, _IOFBF, CANVAS_WIDTH * CANVAS_HEIGHT * 3);
+  fwrite(bitmap, sizeof(Color), CANVAS_WIDTH * CANVAS_HEIGHT, fp);
+  if (fclose(fp) != 0) {
+    printf("Error closing file.\n");
+  }
+}
+
