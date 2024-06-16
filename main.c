@@ -11,6 +11,7 @@ typedef struct Color {
 } Color;
 
 void writeBitmap(Color *bitmap);
+void drawLine(Color *bitmap, int x1, int y1, int x2, int y2, Color color);
 
 int main(void)
 {
@@ -19,16 +20,11 @@ int main(void)
     printf("Error allocating bitmap.\n");
     return EXIT_FAILURE;
   }
-  for (int j = 0; j < CANVAS_HEIGHT; ++j)
-  {
-    for (int i = 0; i < CANVAS_WIDTH; ++i)
-    {
-      int idx = j * CANVAS_WIDTH + i;
-      bitmap[idx].r = i % 256;
-      bitmap[idx].g = j % 256;
-      bitmap[idx].b = (i * j) % 256;
-    }
-  }
+
+  drawLine(bitmap, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT, (Color){255, 0, 0});
+  drawLine(bitmap, 0, CANVAS_HEIGHT, CANVAS_WIDTH, 0, (Color){0, 255, 0});
+  
+
   writeBitmap(bitmap);
   free(bitmap);
   return EXIT_SUCCESS;
@@ -40,7 +36,7 @@ void writeBitmap(Color *bitmap)
     printf("Bitmap is NULL.\n");
     return;
   }
-  FILE *fp = fopen("test.ppm", "wb");
+  FILE *fp = fopen("test2.ppm", "wb");
   if (fp == NULL) {
     printf("Error opening file.\n");
     return;
@@ -53,3 +49,28 @@ void writeBitmap(Color *bitmap)
   }
 }
 
+void drawLine(Color *bitmap, int x1, int y1, int x2, int y2, Color color)
+{
+  if (bitmap == NULL) {
+    printf("Bitmap is NULL.\n");
+    return;
+  }
+  int dx = abs(x2 - x1), sx = x1 < x2 ? 1 : -1;
+  int dy = -abs(y2 - y1), sy = y1 < y2 ? 1 : -1;
+  int err = dx + dy, e2;
+
+  while (1) {
+    bitmap[y1 * CANVAS_WIDTH + x1] = color;
+    if (x1 == x2 && y1 == y2) {
+      break;
+    }
+    e2 = 2 * err;
+    if (e2 >= dy) {
+      err += dy; x1 += sx;
+    }
+    if (e2 <= dx) {
+      err += dx; y1 += sy;
+    }
+  }
+  return;
+}
