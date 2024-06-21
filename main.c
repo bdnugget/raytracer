@@ -22,11 +22,11 @@ typedef struct Vector3 {
   float z;
 } Vector3;
 
-void writeBitmap(Color *bitmap, char *filename);
-void setPixel(Color *bitmap, Vector2 position, Color color);
-void drawLine(Color *bitmap, Vector2 start, Vector2 end, Color color);
+void writeBitmap(Color *canvas, char *filename);
+void setPixel(Color *canvas, Vector2 position, Color color);
+void drawLine(Color *canvas, Vector2 start, Vector2 end, Color color);
 void initScene(void);
-Vector2 viewportToCanvas(Vector2 *position);
+Vector3 canvasToViewport(Vector2 *position);
 
 static Vector3 cameraPosition = { 0 };
 static float distanceCameraToViewport = 1.0f;
@@ -34,28 +34,26 @@ static Vector3 viewportPosition = { 0 };
 static Vector2 viewportSize = { 0 };
 static Vector2 canvasSize = { 0 };
 
+// The global canvas that we draw on
+static Color *canvas = { 0 };
+
 int main(void) {
   initScene();
-  Color *bitmap = malloc(canvasSize.x * canvasSize.y * sizeof(Color));
-  if (bitmap == NULL) {
-    printf("Error allocating bitmap.\n");
-    return EXIT_FAILURE;
-  }
 
-  drawLine(bitmap, (Vector2){0, 0}, (Vector2){canvasSize.x, canvasSize.y},
+  drawLine(canvas, (Vector2){0, 0}, (Vector2){canvasSize.x, canvasSize.y},
            (Color){255, 255, 255});
-  drawLine(bitmap, (Vector2){canvasSize.x, 0}, (Vector2){0, canvasSize.y},
+  drawLine(canvas, (Vector2){canvasSize.x, 0}, (Vector2){0, canvasSize.y},
            (Color){255, 255, 0});
-  drawLine(bitmap, (Vector2){0, canvasSize.y - 300},
+  drawLine(canvas, (Vector2){0, canvasSize.y - 300},
            (Vector2){canvasSize.x, 0}, (Color){255, 0, 255});
-  drawLine(bitmap, (Vector2){canvasSize.x / 2.0f, 0},
+  drawLine(canvas, (Vector2){canvasSize.x / 2.0f, 0},
            (Vector2){canvasSize.x / 2.0f, canvasSize.y}, (Color){0, 255, 255});
-  drawLine(bitmap, (Vector2){0, canvasSize.y / 2.0f},
+  drawLine(canvas, (Vector2){0, canvasSize.y / 2.0f},
            (Vector2){canvasSize.x - 69, canvasSize.y / 2.0f},
            (Color){255, 0, 0});
 
-  writeBitmap(bitmap, "output.ppm");
-  free(bitmap);
+  writeBitmap(canvas, "output.ppm");
+  free(canvas);
   return EXIT_SUCCESS;
 }
 
@@ -65,11 +63,15 @@ void initScene(void) {
   viewportPosition = (Vector3){0, 0, distanceCameraToViewport};
   viewportSize = (Vector2){ 1.0f, 1.0f };
   canvasSize = (Vector2){ CANVAS_WIDTH, CANVAS_HEIGHT };
+  canvas = malloc(canvasSize.x * canvasSize.y * sizeof(Color));
+  if (canvas == NULL) {
+    printf("Error allocating canvas.\n");
+  }
 }
 
-void writeBitmap(Color *bitmap, char *filename) {
-  if (bitmap == NULL) {
-    printf("Bitmap is NULL.\n");
+void writeBitmap(Color *canvas, char *filename) {
+  if (canvas == NULL) {
+    printf("Canvas is NULL.\n");
     return;
   }
   FILE *fp = fopen(filename, "wb");
@@ -79,15 +81,15 @@ void writeBitmap(Color *bitmap, char *filename) {
   }
   fprintf(fp, "P6\n%d %d\n255\n", CANVAS_WIDTH, CANVAS_HEIGHT);
   setvbuf(fp, NULL, _IOFBF, CANVAS_WIDTH * CANVAS_HEIGHT * 3);
-  fwrite(bitmap, sizeof(Color), CANVAS_WIDTH * CANVAS_HEIGHT, fp);
+  fwrite(canvas, sizeof(Color), CANVAS_WIDTH * CANVAS_HEIGHT, fp);
   if (fclose(fp) != 0) {
     printf("Error closing file.\n");
   }
 }
 
-void setPixel(Color *bitmap, Vector2 position, Color color) {
-  if (bitmap == NULL) {
-    printf("Bitmap is NULL.\n");
+void setPixel(Color *canvas, Vector2 position, Color color) {
+  if (canvas == NULL) {
+    printf("Canvas is NULL.\n");
     return;
   }
   if (position.x < 0 || position.x >= CANVAS_WIDTH || position.y < 0 ||
@@ -95,12 +97,12 @@ void setPixel(Color *bitmap, Vector2 position, Color color) {
     printf("Position out of bounds: (%f, %f)\n", position.x, position.y);
     return;
   }
-  bitmap[(int)position.y * CANVAS_WIDTH + (int)position.x] = color;
+  canvas[(int)position.y * CANVAS_WIDTH + (int)position.x] = color;
 }
 
-void drawLine(Color *bitmap, Vector2 start, Vector2 end, Color color) {
-  if (bitmap == NULL) {
-    printf("Bitmap is NULL.\n");
+void drawLine(Color *canvas, Vector2 start, Vector2 end, Color color) {
+  if (canvas == NULL) {
+    printf("Canvas is NULL.\n");
     return;
   }
   if (start.x == end.x) {
@@ -109,7 +111,7 @@ void drawLine(Color *bitmap, Vector2 start, Vector2 end, Color color) {
     int yEnd = (int)end.y;
     int yInc = yStart < yEnd ? 1 : -1;
     for (int y = yStart; y != yEnd + yInc; y += yInc) {
-      setPixel(bitmap, (Vector2){start.x, (float)y}, color);
+      setPixel(canvas, (Vector2){start.x, (float)y}, color);
     }
     return;
   }
@@ -119,7 +121,7 @@ void drawLine(Color *bitmap, Vector2 start, Vector2 end, Color color) {
     int xEnd = (int)end.x;
     int xInc = xStart < xEnd ? 1 : -1;
     for (int x = xStart; x != xEnd + xInc; x += xInc) {
-      setPixel(bitmap, (Vector2){(float)x, start.y}, color);
+      setPixel(canvas, (Vector2){(float)x, start.y}, color);
     }
     return;
   }
@@ -131,7 +133,7 @@ void drawLine(Color *bitmap, Vector2 start, Vector2 end, Color color) {
 
   Vector2 current = start;
   while (1) {
-    setPixel(bitmap, current, color);
+    setPixel(canvas, current, color);
     if (current.x == end.x && current.y == end.y) {
       break;
     }
@@ -145,4 +147,13 @@ void drawLine(Color *bitmap, Vector2 start, Vector2 end, Color color) {
       current.y += sy;
     }
   }
+}
+
+Vector3 canvasToViewport(Vector2 *position) {
+  return (Vector3){
+    (float)position->x * (viewportSize.x/canvasSize.x),
+    (float)position->y * (viewportSize.y/canvasSize.y),
+    viewportPosition.z
+  };
+  // return position.x vw/cw
 }
