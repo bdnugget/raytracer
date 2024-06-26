@@ -36,7 +36,7 @@ void initScene(void);
 
 float dotProduct(Vector3 a, Vector3 b);
 float lengthVector3(Vector3 v);
-float normalize(Vector3 v);
+Vector3 normalize(Vector3 v);
 
 Color traceRay(Vector3 rayOrigin, Vector3 rayDirection, int t_min, int t_max);
 
@@ -55,18 +55,17 @@ static struct Scene {
   int numSpheres;
 } scene;
 
-// The global canvas that we draw on as a sort of bitmap
 static Color *canvas = NULL;
 
 int main(void) {
   initRenderContext();
   initScene();
 
-  for (int x = 0; x < canvasSize.x; x++) {
-    for (int y = 0; y < canvasSize.y; y++) {
-      Vector3 rayDirection = (Vector3){(float)x / canvasSize.x,
-                                       (float)y / canvasSize.y, 0};
-      Vector3 rayOrigin = (Vector3){0, 0, 0};
+  for (int y = 0; y < canvasSize.y; y++) {
+    for (int x = 0; x < canvasSize.x; x++) {
+      Vector2 canvasPos = {x, y};
+      Vector3 rayDirection = normalize(canvasToViewport(canvasPos));
+      Vector3 rayOrigin = cameraPosition;
       Color color = traceRay(rayOrigin, rayDirection, 0, INT_MAX);
       setPixel(canvas, (Vector2){(float)x, (float)y}, color);
     }
@@ -74,17 +73,19 @@ int main(void) {
 
   writeBitmap(canvas, "output.ppm");
   free(canvas);
+  free(scene.spheres);
   return EXIT_SUCCESS;
 }
 
 void initRenderContext(void) {
-  cameraPosition = (Vector3){0, 0, 0};
+  cameraPosition = (Vector3){0.0f, 0.0f, 0.0f};
   distanceCameraToViewport = 1.0f;
-  viewportPosition = (Vector3){0, 0, distanceCameraToViewport};
+  viewportPosition = (Vector3){0.0f, 0.0f, distanceCameraToViewport};
   viewportSize = (Vector2){1.0f, 1.0f};
   canvas = malloc(canvasSize.x * canvasSize.y * sizeof(Color));
   if (canvas == NULL) {
     printf("Error allocating canvas.\n");
+    exit(EXIT_FAILURE);
   }
 }
 
@@ -93,18 +94,19 @@ void initScene(void) {
   scene.spheres = malloc(3 * sizeof(Sphere));
   if (scene.spheres == NULL) {
     printf("Error allocating spheres.\n");
+    exit(EXIT_FAILURE);
   }
   scene.numSpheres = 3;
 
-  scene.spheres[0].position = (Vector3){0, -1, 3};
+  scene.spheres[0].position = (Vector3){0.0f, -1.0f, 3.0f};
   scene.spheres[0].radius = 1.0f;
   scene.spheres[0].color = (Color){255, 0, 0};
 
-  scene.spheres[1].position = (Vector3){2, 0, 4};
+  scene.spheres[1].position = (Vector3){2.0f, 0.0f, 4.0f};
   scene.spheres[1].radius = 1.0f;
   scene.spheres[1].color = (Color){0, 0, 255};
 
-  scene.spheres[2].position = (Vector3){-2, 0, 4};
+  scene.spheres[2].position = (Vector3){-2.0f, 0.0f, 4.0f};
   scene.spheres[2].radius = 1.0f;
   scene.spheres[2].color = (Color){0, 255, 0};
 }
@@ -112,39 +114,40 @@ void initScene(void) {
 void writeBitmap(Color *canvas, char *filename) {
   if (canvas == NULL) {
     printf("Canvas is NULL.\n");
-    return;
+    exit(EXIT_FAILURE);
   }
   FILE *fp = fopen(filename, "wb");
   if (fp == NULL) {
     printf("Error opening file.\n");
-    return;
+    exit(EXIT_FAILURE);
   }
   fprintf(fp, "P6\n%d %d\n255\n", (int)canvasSize.x, (int)canvasSize.y);
   setvbuf(fp, NULL, _IOFBF, canvasSize.x * canvasSize.y * 3);
   fwrite(canvas, sizeof(Color), canvasSize.x * canvasSize.y, fp);
   if (fclose(fp) != 0) {
     printf("Error closing file.\n");
+    exit(EXIT_FAILURE);
   }
 }
 
 void setPixel(Color *canvas, Vector2 position, Color color) {
   if (canvas == NULL) {
     printf("Canvas is NULL.\n");
-    return;
+    exit(EXIT_FAILURE);
   }
   if (position.x < 0 || position.x >= canvasSize.x || position.y < 0 ||
       position.y >= canvasSize.y) {
     printf("Position out of bounds: (%f, %f)\n", position.x, position.y);
-    return;
+    exit(EXIT_FAILURE);
   }
   canvas[(int)position.y * (int)canvasSize.x + (int)position.x] = color;
 }
 
 Vector3 canvasToViewport(Vector2 position) {
-  return (Vector3){(float)position.x * (viewportSize.x / canvasSize.x),
-                   (float)position.y * (viewportSize.y / canvasSize.y),
-                   viewportPosition.z};
-  // return position.x vw/cw
+  return (Vector3){
+      (position.x - canvasSize.x / 2.0f) * viewportSize.x / canvasSize.x,
+      (position.y - canvasSize.y / 2.0f) * viewportSize.y / canvasSize.y,
+      viewportPosition.z};
 }
 
 float dotProduct(Vector3 a, Vector3 b) {
@@ -153,9 +156,10 @@ float dotProduct(Vector3 a, Vector3 b) {
 
 float lengthVector3(Vector3 v) { return sqrtf(dotProduct(v, v)); }
 
-float normalize(Vector3 v) {
+Vector3 normalize(Vector3 v) {
   float length = lengthVector3(v);
-  return length == 0 ? 0 : 1.0f / length;
+  return length == 0.0f ? (Vector3){0, 0, 0}
+                        : (Vector3){v.x / length, v.y / length, v.z / length};
 }
 
 Vector3 subtractVector3(Vector3 a, Vector3 b) {
@@ -163,7 +167,7 @@ Vector3 subtractVector3(Vector3 a, Vector3 b) {
 }
 
 Color traceRay(Vector3 rayOrigin, Vector3 rayDirection, int t_min, int t_max) {
-  int closest_t = INT_MAX;
+  float closest_t = INT_MAX;
   Sphere *closestSphere = NULL;
 
   for (int i = 0; i < scene.numSpheres; i++) {
@@ -189,10 +193,20 @@ Vector2 intersectRaySphere(Vector3 rayOrigin, Vector3 rayDirection,
   float b = 2.0f * dotProduct(oc, rayDirection);
   float c = dotProduct(oc, oc) - sphere->radius * sphere->radius;
   float discriminant = b * b - 4.0f * a * c;
+
   if (discriminant < 0) {
-    return (Vector2){0, 0};
+    return (Vector2){INT_MAX, 0.0f};
   }
-  float t1 = (-b + sqrtf(discriminant)) / (2.0f * a);
-  float t2 = (-b - sqrtf(discriminant)) / (2.0f * a);
-  return (Vector2){t1, t2};
+
+  float discriminantSqrt = sqrtf(discriminant);
+  float t1 = (-b - discriminantSqrt) / (2.0f * a);
+  float t2 = (-b + discriminantSqrt) / (2.0f * a);
+
+  float t = (t1 > 0 && t2 > 0) ? fminf(t1, t2) : fmaxf(t1, t2);
+
+  if (t < 0) {
+    return (Vector2){INT_MAX, 0};
+  }
+
+  return (Vector2){t, 1};
 }
