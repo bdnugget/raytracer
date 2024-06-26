@@ -1,2 +1,6 @@
 # Raytracer from scratch
-@bdnugget
+
+Current output:
+![output](output.ppm)
+
+By @bdnugget
