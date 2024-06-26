@@ -57,6 +57,9 @@ static struct Scene {
 
 static Color *canvas = NULL;
 
+// Billiards table color dark green
+static Color backgroundColor = {0, 64, 0};
+
 int main(void) {
   initRenderContext();
   initScene();
@@ -98,17 +101,18 @@ void initScene(void) {
   }
   scene.numSpheres = 3;
 
+  // Carom billard ball colors
   scene.spheres[0].position = (Vector3){0.0f, -1.0f, 3.0f};
   scene.spheres[0].radius = 1.0f;
   scene.spheres[0].color = (Color){255, 0, 0};
 
   scene.spheres[1].position = (Vector3){2.0f, 0.0f, 4.0f};
   scene.spheres[1].radius = 1.0f;
-  scene.spheres[1].color = (Color){0, 0, 255};
+  scene.spheres[1].color = (Color){255, 255, 0};
 
   scene.spheres[2].position = (Vector3){-2.0f, 0.0f, 4.0f};
   scene.spheres[2].radius = 1.0f;
-  scene.spheres[2].color = (Color){0, 255, 0};
+  scene.spheres[2].color = (Color){255, 255, 255};
 }
 
 void writeBitmap(Color *canvas, char *filename) {
@@ -180,7 +184,7 @@ Color traceRay(Vector3 rayOrigin, Vector3 rayDirection, int t_min, int t_max) {
   }
 
   if (closestSphere == NULL) {
-    return (Color){0, 0, 0};
+    return backgroundColor;
   }
 
   return closestSphere->color;
