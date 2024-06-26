@@ -1,3 +1,4 @@
+#include <limits.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,51 +23,90 @@ typedef struct Vector3 {
   float z;
 } Vector3;
 
+typedef struct Sphere {
+  Vector3 position;
+  float radius;
+  Color color;
+} Sphere;
+
 void writeBitmap(Color *canvas, char *filename);
 void setPixel(Color *canvas, Vector2 position, Color color);
-void drawLine(Color *canvas, Vector2 start, Vector2 end, Color color);
+void initRenderContext(void);
 void initScene(void);
-Vector3 canvasToViewport(Vector2 *position);
 
-static Vector3 cameraPosition = { 0 };
+float dotProduct(Vector3 a, Vector3 b);
+float lengthVector3(Vector3 v);
+float normalize(Vector3 v);
+
+Color traceRay(Vector3 rayOrigin, Vector3 rayDirection, int t_min, int t_max);
+
+Vector2 intersectRaySphere(Vector3 rayOrigin, Vector3 rayDirection,
+                           Sphere *sphere);
+Vector3 canvasToViewport(Vector2 position);
+Vector3 subtractVector3(Vector3 a, Vector3 b);
+
+static Vector3 cameraPosition = {0};
 static float distanceCameraToViewport = 1.0f;
-static Vector3 viewportPosition = { 0 };
-static Vector2 viewportSize = { 0 };
-static Vector2 canvasSize = { 0 };
+static Vector3 viewportPosition = {0};
+static Vector2 viewportSize = {0};
+static Vector2 canvasSize = {.x = CANVAS_WIDTH, .y = CANVAS_HEIGHT};
+static struct Scene {
+  Sphere *spheres;
+  int numSpheres;
+} scene;
 
-// The global canvas that we draw on
-static Color *canvas = { 0 };
+// The global canvas that we draw on as a sort of bitmap
+static Color *canvas = NULL;
 
 int main(void) {
+  initRenderContext();
   initScene();
 
-  drawLine(canvas, (Vector2){0, 0}, (Vector2){canvasSize.x, canvasSize.y},
-           (Color){255, 255, 255});
-  drawLine(canvas, (Vector2){canvasSize.x, 0}, (Vector2){0, canvasSize.y},
-           (Color){255, 255, 0});
-  drawLine(canvas, (Vector2){0, canvasSize.y - 300},
-           (Vector2){canvasSize.x, 0}, (Color){255, 0, 255});
-  drawLine(canvas, (Vector2){canvasSize.x / 2.0f, 0},
-           (Vector2){canvasSize.x / 2.0f, canvasSize.y}, (Color){0, 255, 255});
-  drawLine(canvas, (Vector2){0, canvasSize.y / 2.0f},
-           (Vector2){canvasSize.x - 69, canvasSize.y / 2.0f},
-           (Color){255, 0, 0});
+  for (int x = 0; x < canvasSize.x; x++) {
+    for (int y = 0; y < canvasSize.y; y++) {
+      Vector3 rayDirection = (Vector3){(float)x / canvasSize.x,
+                                       (float)y / canvasSize.y, 0};
+      Vector3 rayOrigin = (Vector3){0, 0, 0};
+      Color color = traceRay(rayOrigin, rayDirection, 0, INT_MAX);
+      setPixel(canvas, (Vector2){(float)x, (float)y}, color);
+    }
+  }
 
   writeBitmap(canvas, "output.ppm");
   free(canvas);
   return EXIT_SUCCESS;
 }
 
-void initScene(void) {
+void initRenderContext(void) {
   cameraPosition = (Vector3){0, 0, 0};
   distanceCameraToViewport = 1.0f;
   viewportPosition = (Vector3){0, 0, distanceCameraToViewport};
-  viewportSize = (Vector2){ 1.0f, 1.0f };
-  canvasSize = (Vector2){ CANVAS_WIDTH, CANVAS_HEIGHT };
+  viewportSize = (Vector2){1.0f, 1.0f};
   canvas = malloc(canvasSize.x * canvasSize.y * sizeof(Color));
   if (canvas == NULL) {
     printf("Error allocating canvas.\n");
   }
+}
+
+void initScene(void) {
+  // Set up 3 spheres
+  scene.spheres = malloc(3 * sizeof(Sphere));
+  if (scene.spheres == NULL) {
+    printf("Error allocating spheres.\n");
+  }
+  scene.numSpheres = 3;
+
+  scene.spheres[0].position = (Vector3){0, -1, 3};
+  scene.spheres[0].radius = 1.0f;
+  scene.spheres[0].color = (Color){255, 0, 0};
+
+  scene.spheres[1].position = (Vector3){2, 0, 4};
+  scene.spheres[1].radius = 1.0f;
+  scene.spheres[1].color = (Color){0, 0, 255};
+
+  scene.spheres[2].position = (Vector3){-2, 0, 4};
+  scene.spheres[2].radius = 1.0f;
+  scene.spheres[2].color = (Color){0, 255, 0};
 }
 
 void writeBitmap(Color *canvas, char *filename) {
@@ -79,9 +119,9 @@ void writeBitmap(Color *canvas, char *filename) {
     printf("Error opening file.\n");
     return;
   }
-  fprintf(fp, "P6\n%d %d\n255\n", CANVAS_WIDTH, CANVAS_HEIGHT);
-  setvbuf(fp, NULL, _IOFBF, CANVAS_WIDTH * CANVAS_HEIGHT * 3);
-  fwrite(canvas, sizeof(Color), CANVAS_WIDTH * CANVAS_HEIGHT, fp);
+  fprintf(fp, "P6\n%d %d\n255\n", (int)canvasSize.x, (int)canvasSize.y);
+  setvbuf(fp, NULL, _IOFBF, canvasSize.x * canvasSize.y * 3);
+  fwrite(canvas, sizeof(Color), canvasSize.x * canvasSize.y, fp);
   if (fclose(fp) != 0) {
     printf("Error closing file.\n");
   }
@@ -92,68 +132,67 @@ void setPixel(Color *canvas, Vector2 position, Color color) {
     printf("Canvas is NULL.\n");
     return;
   }
-  if (position.x < 0 || position.x >= CANVAS_WIDTH || position.y < 0 ||
-      position.y >= CANVAS_HEIGHT) {
+  if (position.x < 0 || position.x >= canvasSize.x || position.y < 0 ||
+      position.y >= canvasSize.y) {
     printf("Position out of bounds: (%f, %f)\n", position.x, position.y);
     return;
   }
-  canvas[(int)position.y * CANVAS_WIDTH + (int)position.x] = color;
+  canvas[(int)position.y * (int)canvasSize.x + (int)position.x] = color;
 }
 
-void drawLine(Color *canvas, Vector2 start, Vector2 end, Color color) {
-  if (canvas == NULL) {
-    printf("Canvas is NULL.\n");
-    return;
-  }
-  if (start.x == end.x) {
-    // Vertical line
-    int yStart = (int)start.y;
-    int yEnd = (int)end.y;
-    int yInc = yStart < yEnd ? 1 : -1;
-    for (int y = yStart; y != yEnd + yInc; y += yInc) {
-      setPixel(canvas, (Vector2){start.x, (float)y}, color);
-    }
-    return;
-  }
-  if (start.y == end.y) {
-    // Horizontal line
-    int xStart = (int)start.x;
-    int xEnd = (int)end.x;
-    int xInc = xStart < xEnd ? 1 : -1;
-    for (int x = xStart; x != xEnd + xInc; x += xInc) {
-      setPixel(canvas, (Vector2){(float)x, start.y}, color);
-    }
-    return;
-  }
-
-  // Diagonal line using Bresenham's algorithm
-  int dx = fabsf(end.x - start.x), sx = start.x < end.x ? 1 : -1;
-  int dy = -fabsf(end.y - start.y), sy = start.y < end.y ? 1 : -1;
-  int err = dx + dy, e2;
-
-  Vector2 current = start;
-  while (1) {
-    setPixel(canvas, current, color);
-    if (current.x == end.x && current.y == end.y) {
-      break;
-    }
-    e2 = 2 * err;
-    if (e2 >= dy) {
-      err += dy;
-      current.x += sx;
-    }
-    if (e2 <= dx) {
-      err += dx;
-      current.y += sy;
-    }
-  }
-}
-
-Vector3 canvasToViewport(Vector2 *position) {
-  return (Vector3){
-    (float)position->x * (viewportSize.x/canvasSize.x),
-    (float)position->y * (viewportSize.y/canvasSize.y),
-    viewportPosition.z
-  };
+Vector3 canvasToViewport(Vector2 position) {
+  return (Vector3){(float)position.x * (viewportSize.x / canvasSize.x),
+                   (float)position.y * (viewportSize.y / canvasSize.y),
+                   viewportPosition.z};
   // return position.x vw/cw
+}
+
+float dotProduct(Vector3 a, Vector3 b) {
+  return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+float lengthVector3(Vector3 v) { return sqrtf(dotProduct(v, v)); }
+
+float normalize(Vector3 v) {
+  float length = lengthVector3(v);
+  return length == 0 ? 0 : 1.0f / length;
+}
+
+Vector3 subtractVector3(Vector3 a, Vector3 b) {
+  return (Vector3){a.x - b.x, a.y - b.y, a.z - b.z};
+}
+
+Color traceRay(Vector3 rayOrigin, Vector3 rayDirection, int t_min, int t_max) {
+  int closest_t = INT_MAX;
+  Sphere *closestSphere = NULL;
+
+  for (int i = 0; i < scene.numSpheres; i++) {
+    Vector2 intersection =
+        intersectRaySphere(rayOrigin, rayDirection, &scene.spheres[i]);
+    if (intersection.y == 1 && intersection.x < closest_t) {
+      closest_t = intersection.x;
+      closestSphere = &scene.spheres[i];
+    }
+  }
+
+  if (closestSphere == NULL) {
+    return (Color){0, 0, 0};
+  }
+
+  return closestSphere->color;
+}
+
+Vector2 intersectRaySphere(Vector3 rayOrigin, Vector3 rayDirection,
+                           Sphere *sphere) {
+  Vector3 oc = subtractVector3(rayOrigin, sphere->position);
+  float a = dotProduct(rayDirection, rayDirection);
+  float b = 2.0f * dotProduct(oc, rayDirection);
+  float c = dotProduct(oc, oc) - sphere->radius * sphere->radius;
+  float discriminant = b * b - 4.0f * a * c;
+  if (discriminant < 0) {
+    return (Vector2){0, 0};
+  }
+  float t1 = (-b + sqrtf(discriminant)) / (2.0f * a);
+  float t2 = (-b - sqrtf(discriminant)) / (2.0f * a);
+  return (Vector2){t1, t2};
 }
