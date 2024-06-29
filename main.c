@@ -29,6 +29,21 @@ typedef struct Sphere {
   Color color;
 } Sphere;
 
+typedef enum LightType {
+  AMBIENT,
+  POINT,
+  DIRECTIONAL
+} LightType;
+
+typedef struct Light {
+  float intensity;
+  LightType type;
+  union {
+    Vector3 position;
+    Vector3 direction;
+  };
+} Light;
+
 void writeBitmap(Color *canvas, char *filename);
 void setPixel(Color *canvas, Vector2 position, Color color);
 void initRenderContext(void);
@@ -55,6 +70,8 @@ static struct Scene {
   int numSpheres;
 } scene;
 
+static Light *lights = NULL;
+static int numLights = 0;
 static Color *canvas = NULL;
 
 // Billiards table color dark green
@@ -113,6 +130,25 @@ void initScene(void) {
   scene.spheres[2].position = (Vector3){-2.0f, 0.0f, 4.0f};
   scene.spheres[2].radius = 1.0f;
   scene.spheres[2].color = (Color){255, 255, 255};
+
+  // Set up lights
+  lights = malloc(3 * sizeof(Light));
+  if (lights == NULL) {
+    printf("Error allocating lights.\n");
+    exit(EXIT_FAILURE);
+  }
+  numLights = 3;
+
+  lights[0].type = AMBIENT;
+  lights[0].intensity = 0.2f;
+
+  lights[1].type = POINT;
+  lights[1].intensity = 0.6f;
+  lights[1].position = (Vector3){2.0f, 1.0f, 0.0f};
+
+  lights[2].type = DIRECTIONAL;
+  lights[2].intensity = 0.2f;
+  lights[2].direction = (Vector3){ 1.0f, 4.0f, 4.0f};
 }
 
 void writeBitmap(Color *canvas, char *filename) {
