@@ -29,11 +29,7 @@ typedef struct Sphere {
   Color color;
 } Sphere;
 
-typedef enum LightType {
-  AMBIENT,
-  POINT,
-  DIRECTIONAL
-} LightType;
+typedef enum LightType { AMBIENT, POINT, DIRECTIONAL } LightType;
 
 typedef struct Light {
   float intensity;
@@ -51,6 +47,7 @@ void initScene(void);
 
 float dotProduct(Vector3 a, Vector3 b);
 float lengthVector3(Vector3 v);
+float computeLighting(Vector3 pointOnSurface, Vector3 surfaceNormal);
 Vector3 normalize(Vector3 v);
 
 Color traceRay(Vector3 rayOrigin, Vector3 rayDirection, int t_min, int t_max);
@@ -59,6 +56,8 @@ Vector2 intersectRaySphere(Vector3 rayOrigin, Vector3 rayDirection,
                            Sphere *sphere);
 Vector3 canvasToViewport(Vector2 position);
 Vector3 subtractVector3(Vector3 a, Vector3 b);
+Vector3 addVector3(Vector3 a, Vector3 b);
+Vector3 scaleVector3(Vector3 v, float scale);
 
 static Vector3 cameraPosition = {0};
 static float distanceCameraToViewport = 1.0f;
@@ -139,6 +138,7 @@ void initScene(void) {
   }
   numLights = 3;
 
+  // Intensities add up to 1 so we don't get "under- or overexposure"
   lights[0].type = AMBIENT;
   lights[0].intensity = 0.2f;
 
@@ -148,7 +148,7 @@ void initScene(void) {
 
   lights[2].type = DIRECTIONAL;
   lights[2].intensity = 0.2f;
-  lights[2].direction = (Vector3){ 1.0f, 4.0f, 4.0f};
+  lights[2].direction = (Vector3){1.0f, 4.0f, 4.0f};
 }
 
 void writeBitmap(Color *canvas, char *filename) {
@@ -206,6 +206,14 @@ Vector3 subtractVector3(Vector3 a, Vector3 b) {
   return (Vector3){a.x - b.x, a.y - b.y, a.z - b.z};
 }
 
+Vector3 addVector3(Vector3 a, Vector3 b) {
+  return (Vector3){a.x + b.x, a.y + b.y, a.z + b.z};
+}
+
+Vector3 scaleVector3(Vector3 v, float s) {
+  return (Vector3){v.x * s, v.y * s, v.z * s};
+}
+
 Color traceRay(Vector3 rayOrigin, Vector3 rayDirection, int t_min, int t_max) {
   float closest_t = INT_MAX;
   Sphere *closestSphere = NULL;
@@ -223,7 +231,17 @@ Color traceRay(Vector3 rayOrigin, Vector3 rayDirection, int t_min, int t_max) {
     return backgroundColor;
   }
 
-  return closestSphere->color;
+  Vector3 point = addVector3(rayOrigin, scaleVector3(rayDirection, closest_t));
+  Vector3 normal = subtractVector3(point, closestSphere->position);
+  normal = normalize(normal);
+
+  float lighting = computeLighting(point, normal);
+  Color result = (Color){
+      lighting * closestSphere->color.r,
+      lighting * closestSphere->color.g,
+      lighting * closestSphere->color.b,
+  };
+  return result;
 }
 
 Vector2 intersectRaySphere(Vector3 rayOrigin, Vector3 rayDirection,
@@ -249,4 +267,26 @@ Vector2 intersectRaySphere(Vector3 rayOrigin, Vector3 rayDirection,
   }
 
   return (Vector2){t, 1};
+}
+
+float computeLighting(Vector3 surfacePosition, Vector3 surfaceNormal) {
+  float lighting = 0.0f;
+  for (int i = 0; i < numLights; i++) {
+    if (lights[i].type == AMBIENT) {
+      lighting += lights[i].intensity;
+    } else if (lights[i].type == POINT) {
+      Vector3 l = normalize(subtractVector3(lights[i].position, surfacePosition));
+      float nDotL = dotProduct(surfaceNormal, l);
+      if (nDotL > 0) {
+        lighting += lights[i].intensity * nDotL;
+      }
+    } else if (lights[i].type == DIRECTIONAL) {
+      Vector3 l = normalize(lights[i].direction);
+      float nDotL = dotProduct(surfaceNormal, l);
+      if (nDotL > 0) {
+        lighting += lights[i].intensity * nDotL;
+      }
+    }
+  }
+  return lighting;
 }
