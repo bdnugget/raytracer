@@ -46,6 +46,10 @@ void setPixel(Color *canvas, Vector2 position, Color color);
 void initRenderContext(void);
 void initScene(void);
 
+unsigned char clamp(float value) {
+  return (unsigned char)(value > 255 ? 255 : value < 0 ? 0 : value);
+}
+
 float dotProduct(Vector3 a, Vector3 b);
 float lengthVector3(Vector3 v);
 float computeLighting(Vector3 pointOnSurface, Vector3 surfaceNormal,
@@ -248,9 +252,9 @@ Color traceRay(Vector3 rayOrigin, Vector3 rayDirection, int t_min, int t_max) {
   float lighting =
       computeLighting(point, normal, rayDirection, closestSphere->specular);
   Color result = (Color){
-      lighting * closestSphere->color.r,
-      lighting * closestSphere->color.g,
-      lighting * closestSphere->color.b,
+      .r = clamp(lighting * closestSphere->color.r),
+      .g = clamp(lighting * closestSphere->color.g),
+      .b = clamp(lighting * closestSphere->color.b)
   };
   return result;
 }
