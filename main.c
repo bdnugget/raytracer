@@ -73,8 +73,7 @@ static Light *lights = NULL;
 static int numLights = 0;
 static Color *canvas = NULL;
 
-// Billiards table color dark green
-static Color backgroundColor = {0, 64, 0};
+static Color backgroundColor = {10, 10, 10};
 
 int main(void) {
   initRenderContext();
@@ -109,16 +108,16 @@ void initRenderContext(void) {
 }
 
 void initScene(void) {
-  // Set up 3 spheres
-  scene.spheres = malloc(3 * sizeof(Sphere));
+  // Set up spheres
+  scene.numSpheres = 4;
+  scene.spheres = malloc(scene.numSpheres * sizeof(Sphere));
   if (scene.spheres == NULL) {
     printf("Error allocating spheres.\n");
     exit(EXIT_FAILURE);
   }
-  scene.numSpheres = 3;
 
   // Carom billard ball colors
-  scene.spheres[0].position = (Vector3){0.0f, -1.0f, 3.0f};
+  scene.spheres[0].position = (Vector3){0.0f, 1.0f, 3.0f};
   scene.spheres[0].radius = 1.0f;
   scene.spheres[0].color = (Color){255, 0, 0};
 
@@ -129,6 +128,11 @@ void initScene(void) {
   scene.spheres[2].position = (Vector3){-2.0f, 0.0f, 4.0f};
   scene.spheres[2].radius = 1.0f;
   scene.spheres[2].color = (Color){255, 255, 255};
+
+  // Huge green ogre ball lol
+  scene.spheres[3].position = (Vector3){0.0f, 5001.0f, 0.0f};
+  scene.spheres[3].radius = 5000.0f;
+  scene.spheres[3].color = (Color){0, 255, 0};
 
   // Set up lights
   lights = malloc(3 * sizeof(Light));
