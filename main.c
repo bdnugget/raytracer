@@ -27,6 +27,7 @@ typedef struct Sphere {
   Vector3 position;
   float radius;
   Color color;
+  float specular;
 } Sphere;
 
 typedef enum LightType { AMBIENT, POINT, DIRECTIONAL } LightType;
@@ -47,7 +48,8 @@ void initScene(void);
 
 float dotProduct(Vector3 a, Vector3 b);
 float lengthVector3(Vector3 v);
-float computeLighting(Vector3 pointOnSurface, Vector3 surfaceNormal);
+float computeLighting(Vector3 pointOnSurface, Vector3 surfaceNormal,
+                      Vector3 pointToCamera, float specular);
 Vector3 normalize(Vector3 v);
 
 Color traceRay(Vector3 rayOrigin, Vector3 rayDirection, int t_min, int t_max);
@@ -120,19 +122,23 @@ void initScene(void) {
   scene.spheres[0].position = (Vector3){0.0f, 1.0f, 3.0f};
   scene.spheres[0].radius = 1.0f;
   scene.spheres[0].color = (Color){255, 0, 0};
+  scene.spheres[0].specular = 500.0f;
 
   scene.spheres[1].position = (Vector3){2.0f, 0.0f, 4.0f};
   scene.spheres[1].radius = 1.0f;
   scene.spheres[1].color = (Color){255, 255, 0};
+  scene.spheres[1].specular = 500.0f;
 
   scene.spheres[2].position = (Vector3){-2.0f, 0.0f, 4.0f};
   scene.spheres[2].radius = 1.0f;
   scene.spheres[2].color = (Color){255, 255, 255};
+  scene.spheres[2].specular = 10.0f;
 
   // Huge green ogre ball lol
   scene.spheres[3].position = (Vector3){0.0f, 5001.0f, 0.0f};
   scene.spheres[3].radius = 5000.0f;
   scene.spheres[3].color = (Color){0, 255, 0};
+  scene.spheres[3].specular = 1000.0f;
 
   // Set up lights
   lights = malloc(3 * sizeof(Light));
@@ -239,7 +245,8 @@ Color traceRay(Vector3 rayOrigin, Vector3 rayDirection, int t_min, int t_max) {
   Vector3 normal = subtractVector3(point, closestSphere->position);
   normal = normalize(normal);
 
-  float lighting = computeLighting(point, normal);
+  float lighting =
+      computeLighting(point, normal, rayDirection, closestSphere->specular);
   Color result = (Color){
       lighting * closestSphere->color.r,
       lighting * closestSphere->color.g,
@@ -273,22 +280,34 @@ Vector2 intersectRaySphere(Vector3 rayOrigin, Vector3 rayDirection,
   return (Vector2){t, 1};
 }
 
-float computeLighting(Vector3 surfacePosition, Vector3 surfaceNormal) {
+float computeLighting(Vector3 surfacePosition, Vector3 surfaceNormal,
+                      Vector3 pointToCamera, float specular) {
   float lighting = 0.0f;
   for (int i = 0; i < numLights; i++) {
     if (lights[i].type == AMBIENT) {
       lighting += lights[i].intensity;
-    } else if (lights[i].type == POINT) {
-      Vector3 l = normalize(subtractVector3(lights[i].position, surfacePosition));
+    } else {
+      Vector3 l = {0};
+      if (lights[i].type == POINT) {
+        l = normalize(subtractVector3(lights[i].position, surfacePosition));
+      } else {
+        l = normalize(lights[i].direction);
+      }
+
+      // Diffuse reflection
       float nDotL = dotProduct(surfaceNormal, l);
       if (nDotL > 0) {
         lighting += lights[i].intensity * nDotL;
       }
-    } else if (lights[i].type == DIRECTIONAL) {
-      Vector3 l = normalize(lights[i].direction);
-      float nDotL = dotProduct(surfaceNormal, l);
-      if (nDotL > 0) {
-        lighting += lights[i].intensity * nDotL;
+
+      // Specular reflection
+      if (specular > 0) {
+        Vector3 r =
+            normalize(subtractVector3(scaleVector3(l, -1.0f), surfaceNormal));
+        float rDotV = dotProduct(r, pointToCamera);
+        if (rDotV > 0) {
+          lighting += lights[i].intensity * powf(rDotV, specular);
+        }
       }
     }
   }
